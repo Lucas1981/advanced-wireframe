@@ -1,0 +1,46 @@
+{
+    "points": [
+        { "x": -1, "y": 0, "z": -1 },
+        { "x": 1, "y": 0, "z": -1 },
+        { "x": 1, "y": 0, "z": 1 },
+        { "x": -1, "y": 0, "z": 1 },
+        { "x": 0, "y": 2, "z": 0 }
+    ],
+    "vertices": [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
+        [0, 4],
+        [1, 4],
+        [2, 4],
+        [3, 4],
+        [0, 2]
+    ],
+    "polygons": [
+        {
+            "color": "#ff6600",
+            "vertexIndices": [0, 1, 8]
+        },
+        {
+            "color": "#ff6600",
+            "vertexIndices": [8, 2, 3]
+        },
+        {
+            "color": "#ff9900",
+            "vertexIndices": [0, 5, 4]
+        },
+        {
+            "color": "#ffcc00",
+            "vertexIndices": [1, 6, 5]
+        },
+        {
+            "color": "#ffff00",
+            "vertexIndices": [2, 7, 6]
+        },
+        {
+            "color": "#ccff00",
+            "vertexIndices": [3, 4, 7]
+        }
+    ]
+}
