@@ -1,7 +1,7 @@
 // Entry point for the 3D wireframe engine
 import { loadMesh } from "./io/meshLoader";
 import { Vec3 } from "./math/vec3";
-import { projectSceneToLineSegments } from "./core/renderHelpers";
+import { projectSceneToPolygonWireframe } from "./core/renderHelpers";
 import { Viewport } from "./math/projection";
 import { degToRad } from "./math/utils";
 import { Canvas } from "./core/Canvas";
@@ -75,12 +75,15 @@ async function main() {
       const projection = camera.getProjectionMatrix(aspect);
       const viewProj = projection.multiply(view);
 
-      const lineSegments = projectSceneToLineSegments(
+      const batches = projectSceneToPolygonWireframe(
         scene,
         viewProj,
         viewport,
       );
-      canvas.drawLines(lineSegments, "#00ff00", 2);
+      const lineWidth = 2;
+      for (const batch of batches) {
+        canvas.drawLines(batch.segments, batch.color, lineWidth);
+      }
 
       requestAnimationFrame(render);
     }

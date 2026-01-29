@@ -2,18 +2,17 @@ import { Vec3 } from "../math/vec3";
 
 export interface Polygon {
   color: string;
+  /** Indices into the mesh vertices array. Renderer draws lines 1-2, 2-3, ..., n-1 (last back to first). */
   vertexIndices: number[];
 }
 
 export interface MeshData {
-  points: Vec3[];
-  vertices: [number, number][];
+  vertices: Vec3[];
   polygons: Polygon[];
 }
 
 export interface MeshJSON {
-  points: Array<{ x: number; y: number; z: number }>;
-  vertices: Array<[number, number]>;
+  vertices: Array<{ x: number; y: number; z?: number }>;
   polygons?: Array<{
     color: string;
     vertexIndices: number[];
@@ -22,7 +21,8 @@ export interface MeshJSON {
 
 /**
  * Load a mesh from a JSON file.
- * For now, we only load points and vertices (edges) for wireframe rendering.
+ * Format: vertices (3D positions), polygons (each has color and vertexIndices into vertices).
+ * No separate edge list: lines are implied by each polygon (consecutive vertices, then last to first).
  */
 export async function loadMesh(url: string): Promise<MeshData> {
   const response = await fetch(url);
@@ -32,17 +32,10 @@ export async function loadMesh(url: string): Promise<MeshData> {
 
   const json: MeshJSON = await response.json();
 
-  // Convert points to Vec3 array
-  const points = json.points.map((p) => new Vec3(p.x, p.y, p.z));
-
-  // Vertices are already in the right format [indexA, indexB][]
-  const vertices: [number, number][] = json.vertices;
-
-  // Polygons (optional in JSON; default to empty for wireframe-only meshes)
+  const vertices = json.vertices.map((v) => new Vec3(v.x, v.y, v.z ?? 0));
   const polygons: Polygon[] = json.polygons ?? [];
 
   return {
-    points,
     vertices,
     polygons,
   };

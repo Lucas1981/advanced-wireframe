@@ -3,73 +3,83 @@ import { Mat4 } from "../math/mat4";
 import { projectPoint, Viewport } from "../math/projection";
 import { isSphereInFrustum } from "../math/frustum";
 import { Scene } from "./Scene";
+import type { Polygon } from "../io/meshLoader";
 
-/** Geometry that has points and vertices (Mesh or MeshData). */
+/** Geometry that has vertices and polygons (Mesh or MeshData). */
 export interface MeshLike {
-  points: Vec3[];
-  vertices: [number, number][];
+  vertices: Vec3[];
+  polygons: Polygon[];
+}
+
+/** A batch of line segments drawn in a single color (e.g. one polygon's wireframe). */
+export interface ColoredSegmentBatch {
+  color: string;
+  segments: Array<[number, number, number, number]>;
 }
 
 /**
- * Project all mesh points to screen space using the MVP matrix.
+ * Project all mesh vertices to screen space using the MVP matrix.
  * Returns an array where each element is either a Vec3 (screen coordinates)
- * or null if the point is behind the camera or invalid.
+ * or null if the vertex is behind the camera or invalid.
  */
-export function projectMeshPoints(
+export function projectMeshVertices(
   mesh: MeshLike,
   mvp: Mat4,
   viewport: Viewport
 ): (Vec3 | null)[] {
-  const projectedPoints: (Vec3 | null)[] = [];
+  const projected: (Vec3 | null)[] = [];
 
-  for (const point of mesh.points) {
-    const projected = projectPoint(point, mvp, viewport);
-    if (projected && !projected.behind) {
-      projectedPoints.push(new Vec3(projected.x, projected.y, 0));
+  for (const vertex of mesh.vertices) {
+    const p = projectPoint(vertex, mvp, viewport);
+    if (p && !p.behind) {
+      projected.push(new Vec3(p.x, p.y, 0));
     } else {
-      projectedPoints.push(null);
+      projected.push(null);
     }
   }
 
-  return projectedPoints;
+  return projected;
 }
 
 /**
- * Collect line segments from projected points and mesh vertices.
- * Returns an array of line segments: [[x1, y1, x2, y2], ...]
- * Only includes segments where both endpoints are valid and visible.
+ * Build wireframe segments for a single polygon from projected vertices.
+ * Draws lines between consecutive vertex indices, then last back to first.
+ * Returns the segments, or null if any polygon vertex is invalid or behind.
  */
-export function collectLineSegments(
-  projectedPoints: (Vec3 | null)[],
-  vertices: [number, number][]
-): Array<[number, number, number, number]> {
-  const lineSegments: Array<[number, number, number, number]> = [];
+export function collectPolygonSegments(
+  projectedVertices: (Vec3 | null)[],
+  polygon: Polygon
+): Array<[number, number, number, number]> | null {
+  const indices = polygon.vertexIndices;
+  if (indices.length < 2) return [];
 
-  for (const [indexA, indexB] of vertices) {
-    const pointA = projectedPoints[indexA];
-    const pointB = projectedPoints[indexB];
+  const segments: Array<[number, number, number, number]> = [];
 
-    // Only draw if both points are valid and visible
-    if (pointA && pointB) {
-      lineSegments.push([pointA.x, pointA.y, pointB.x, pointB.y]);
-    }
+  for (let i = 0; i < indices.length; i++) {
+    const idxA = indices[i];
+    const idxB = indices[(i + 1) % indices.length];
+    const vA = projectedVertices[idxA];
+    const vB = projectedVertices[idxB];
+
+    if (!vA || !vB) return null;
+    segments.push([vA.x, vA.y, vB.x, vB.y]);
   }
 
-  return lineSegments;
+  return segments;
 }
 
 /**
- * Project the whole scene to screen-space line segments.
- * Uses a view-projection matrix; each object's model matrix is applied.
- * Objects whose bounding sphere is fully outside the view frustum are skipped (object-level frustum culling).
- * Returns all wireframe segments for all visible objects in the scene.
+ * Project the whole scene to screen-space wireframe per polygon.
+ * Each object (after frustum culling) is rendered by polygon: for each polygon,
+ * project its vertex indices; draw lines 1-2, 2-3, ..., n-1 (last back to first).
+ * Returns batches of segments with color for drawing.
  */
-export function projectSceneToLineSegments(
+export function projectSceneToPolygonWireframe(
   scene: Scene,
   viewProj: Mat4,
   viewport: Viewport
-): Array<[number, number, number, number]> {
-  const allSegments: Array<[number, number, number, number]> = [];
+): ColoredSegmentBatch[] {
+  const batches: ColoredSegmentBatch[] = [];
   const camera = scene.camera;
   const view = camera.getViewMatrix();
   const aspect = viewport.width / viewport.height;
@@ -97,11 +107,15 @@ export function projectSceneToLineSegments(
 
     const model = object.getModelMatrix();
     const mvp = viewProj.multiply(model);
-    const projectedPoints = projectMeshPoints(mesh, mvp, viewport);
-    const segments = collectLineSegments(projectedPoints, mesh.vertices);
-    allSegments.push(...segments);
+    const projectedVertices = projectMeshVertices(mesh, mvp, viewport);
+
+    for (const polygon of mesh.polygons) {
+      const segments = collectPolygonSegments(projectedVertices, polygon);
+      if (segments !== null && segments.length > 0) {
+        batches.push({ color: polygon.color, segments });
+      }
+    }
   }
 
-  return allSegments;
+  return batches;
 }
-
