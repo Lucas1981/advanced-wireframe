@@ -1,6 +1,7 @@
 import { Vec3 } from "../math/vec3";
 import { Mat4 } from "../math/mat4";
 import { projectPoint, Viewport } from "../math/projection";
+import { isSphereInFrustum } from "../math/frustum";
 import { Scene } from "./Scene";
 
 /** Geometry that has points and vertices (Mesh or MeshData). */
@@ -60,7 +61,8 @@ export function collectLineSegments(
 /**
  * Project the whole scene to screen-space line segments.
  * Uses a view-projection matrix; each object's model matrix is applied.
- * Returns all wireframe segments for all objects in the scene.
+ * Objects whose bounding sphere is fully outside the view frustum are skipped (object-level frustum culling).
+ * Returns all wireframe segments for all visible objects in the scene.
  */
 export function projectSceneToLineSegments(
   scene: Scene,
@@ -68,12 +70,35 @@ export function projectSceneToLineSegments(
   viewport: Viewport
 ): Array<[number, number, number, number]> {
   const allSegments: Array<[number, number, number, number]> = [];
+  const camera = scene.camera;
+  const view = camera.getViewMatrix();
+  const aspect = viewport.width / viewport.height;
 
   for (const object of scene.objects) {
+    const mesh = object.mesh;
+    const worldCenter = object.position;
+    const worldRadius =
+      mesh.boundingRadius *
+      Math.max(object.scale.x, object.scale.y, object.scale.z);
+
+    if (
+      !isSphereInFrustum(
+        worldCenter,
+        worldRadius,
+        view,
+        camera.fovYRad,
+        aspect,
+        camera.near,
+        camera.far
+      )
+    ) {
+      continue;
+    }
+
     const model = object.getModelMatrix();
     const mvp = viewProj.multiply(model);
-    const projectedPoints = projectMeshPoints(object.mesh, mvp, viewport);
-    const segments = collectLineSegments(projectedPoints, object.mesh.vertices);
+    const projectedPoints = projectMeshPoints(mesh, mvp, viewport);
+    const segments = collectLineSegments(projectedPoints, mesh.vertices);
     allSegments.push(...segments);
   }
 

@@ -1,6 +1,5 @@
 // Entry point for the 3D wireframe engine
 import { loadMesh } from "./io/meshLoader";
-import { Mat4 } from "./math/mat4";
 import { Vec3 } from "./math/vec3";
 import { projectSceneToLineSegments } from "./core/renderHelpers";
 import { Viewport } from "./math/projection";
@@ -30,7 +29,13 @@ const far = 100;
 let yaw = 0; // left/right
 let pitch = -degToRad(20); // slight downward tilt to start
 const cameraPosition = new Vec3(0, 4, 10);
-const camera = new Camera(cameraPosition, Quat.fromEuler(yaw, pitch, 0), fov, near, far);
+const camera = new Camera(
+  cameraPosition,
+  Quat.fromEuler(yaw, pitch, 0),
+  fov,
+  near,
+  far,
+);
 const input = new InputController();
 
 // Load the cube mesh and start rendering
@@ -58,7 +63,7 @@ async function main() {
       pitch = updated.pitch;
 
       // --- Object animation ---
-      const angle = now / 1000 * ((Math.PI * 2) / 4);
+      const angle = (now / 1000) * ((Math.PI * 2) / 4);
 
       // Update each object's rotation (both spin around Y)
       for (const object of scene.objects) {
@@ -70,7 +75,11 @@ async function main() {
       const projection = camera.getProjectionMatrix(aspect);
       const viewProj = projection.multiply(view);
 
-      const lineSegments = projectSceneToLineSegments(scene, viewProj, viewport);
+      const lineSegments = projectSceneToLineSegments(
+        scene,
+        viewProj,
+        viewport,
+      );
       canvas.drawLines(lineSegments, "#00ff00", 2);
 
       requestAnimationFrame(render);
@@ -83,4 +92,3 @@ async function main() {
 }
 
 main();
-

@@ -1,8 +1,14 @@
 import { Vec3 } from "../math/vec3";
 
+export interface Polygon {
+  color: string;
+  vertexIndices: number[];
+}
+
 export interface MeshData {
   points: Vec3[];
   vertices: [number, number][];
+  polygons: Polygon[];
 }
 
 export interface MeshJSON {
@@ -32,8 +38,12 @@ export async function loadMesh(url: string): Promise<MeshData> {
   // Vertices are already in the right format [indexA, indexB][]
   const vertices: [number, number][] = json.vertices;
 
+  // Polygons (optional in JSON; default to empty for wireframe-only meshes)
+  const polygons: Polygon[] = json.polygons ?? [];
+
   return {
     points,
     vertices,
+    polygons,
   };
 }
