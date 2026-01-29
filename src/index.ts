@@ -38,6 +38,15 @@ const camera = new Camera(
 );
 const input = new InputController();
 
+/** When true, draw each polygon's surface normal as a small pink line. */
+const DEBUG_SHOW_DIRECTION = false;
+
+/** When true, sort polygons by depth (farthest first) before drawing (Painter's algorithm). */
+const APPLY_PAINTERS_ALGORITHM = false;
+
+/** When true, skip polygons facing away from the camera (back-face culling). */
+const APPLY_BACK_FACE_CULLING = false;
+
 // Load the cube mesh and start rendering
 async function main() {
   try {
@@ -75,14 +84,22 @@ async function main() {
       const projection = camera.getProjectionMatrix(aspect);
       const viewProj = projection.multiply(view);
 
-      const batches = projectSceneToPolygonWireframe(
+      const { batches, debugNormalSegments } = projectSceneToPolygonWireframe(
         scene,
         viewProj,
         viewport,
+        {
+          debugShowDirection: DEBUG_SHOW_DIRECTION,
+          applyPaintersAlgorithm: APPLY_PAINTERS_ALGORITHM,
+          applyBackFaceCulling: APPLY_BACK_FACE_CULLING,
+        },
       );
       const lineWidth = 2;
       for (const batch of batches) {
         canvas.drawLines(batch.segments, batch.color, lineWidth);
+      }
+      if (debugNormalSegments.length > 0) {
+        canvas.drawLines(debugNormalSegments, "#ff69b4", 1);
       }
 
       requestAnimationFrame(render);

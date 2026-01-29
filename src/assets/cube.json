@@ -10,17 +10,17 @@
     { "x": -1, "y": 1, "z": 1 }
   ],
   "polygons": [
-    { "color": "#ff0000", "vertexIndices": [0, 1, 2] },
-    { "color": "#ff0000", "vertexIndices": [0, 2, 3] },
+    { "color": "#ff0000", "vertexIndices": [0, 2, 1] },
+    { "color": "#ff0000", "vertexIndices": [0, 3, 2] },
     { "color": "#00ff00", "vertexIndices": [4, 5, 6] },
     { "color": "#00ff00", "vertexIndices": [4, 6, 7] },
-    { "color": "#0000ff", "vertexIndices": [1, 5, 6] },
-    { "color": "#0000ff", "vertexIndices": [1, 6, 2] },
-    { "color": "#ffff00", "vertexIndices": [0, 4, 5] },
-    { "color": "#ffff00", "vertexIndices": [0, 5, 1] },
-    { "color": "#ff00ff", "vertexIndices": [0, 3, 7] },
-    { "color": "#ff00ff", "vertexIndices": [0, 7, 4] },
-    { "color": "#00ffff", "vertexIndices": [3, 2, 6] },
-    { "color": "#00ffff", "vertexIndices": [3, 6, 7] }
+    { "color": "#0000ff", "vertexIndices": [1, 6, 5] },
+    { "color": "#0000ff", "vertexIndices": [1, 2, 6] },
+    { "color": "#ffff00", "vertexIndices": [0, 5, 4] },
+    { "color": "#ffff00", "vertexIndices": [0, 1, 5] },
+    { "color": "#ff00ff", "vertexIndices": [0, 7, 3] },
+    { "color": "#ff00ff", "vertexIndices": [0, 4, 7] },
+    { "color": "#00ffff", "vertexIndices": [3, 6, 2] },
+    { "color": "#00ffff", "vertexIndices": [3, 7, 6] }
   ]
 }
