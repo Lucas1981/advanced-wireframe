@@ -12,7 +12,7 @@ A TypeScript 3D wireframe engine that renders meshes as colored polygon outlines
 - **IO:** Mesh JSON (vertices + polygons) loaded via `loadMesh(url)`; no separate edge list.
 - **Frustum culling:** Object-level; world-space bounding sphere tested against the view frustum; off-screen objects are skipped.
 - **Rendering:** Per-polygon wireframe: project vertices, then for each polygon draw lines between consecutive vertex indices (and last to first) in polygon color.
-- **Back-face culling (optional):** Polygon normal in camera space from first three vertices; polygons with normal.z < 0 are skipped. Toggled by `APPLY_BACK_FACE_CULLING`.
+- **Back-face culling (optional):** Polygon normal in camera space from first three vertices; perspective-correct — dot product of normal against the view vector from the first vertex toward the camera (which sits at the origin in camera space); polygons facing away are skipped. Toggled by `APPLY_BACK_FACE_CULLING`.
 - **Painter's algorithm (optional):** Depth per polygon (average camera-space z); sort by depth ascending (farthest first); draw in that order. Toggled by `APPLY_PAINTERS_ALGORITHM`.
 - **Debug:** Optional pink lines for polygon surface normals; toggled by `DEBUG_SHOW_DIRECTION`.
 
@@ -67,7 +67,7 @@ src/
 - **Scene:** `objects: Object3D[]`, `camera: Camera`.
 - **Camera:** `position`, `orientation` (Quat), `fovYRad`, `near`, `far`; `getViewMatrix()`, `getProjectionMatrix(aspect)`.
 
-Vertex winding in the JSON defines the polygon normal (right-hand rule from first three vertices); outward normals are used for correct back-face culling.
+Vertex winding in the JSON defines the polygon normal direction (right-hand rule from first three vertices). For back-face culling, the normal is dotted against the view vector from the surface to the camera; because culling is done in camera space where the camera is always at the origin, that view vector is simply the negation of the vertex position. Outward-facing winding is required for polygons to survive the cull test.
 
 ## Rendering pipeline
 
@@ -76,7 +76,7 @@ Vertex winding in the JSON defines the polygon normal (right-hand rule from firs
 3. **Per frame:**
    - For each object: test world bounding sphere with `isSphereInFrustum`; skip if outside.
    - For each visible object: transform vertices to camera space (view×model); project vertices to screen (viewProj×model, viewport).
-   - For each polygon: if back-face culling is on, compute normal in camera space and skip when normal.z < 0. Collect wireframe segments (consecutive vertex indices, last→first) and polygon depth (average camera-space z).
+   - For each polygon: if back-face culling is on, compute the normal in camera space (cross product of first two edges, normalized) and skip the polygon when `dot(normal, -v0) < 0` — perspective-correct because the camera is at the origin in camera space. Collect wireframe segments (consecutive vertex indices, last→first) and polygon depth (average camera-space z).
    - If Painter's algorithm is on: sort batches by depth ascending (farthest first).
    - Draw batches in order: for each batch, `drawLines(segments, color, lineWidth)`. If debug normals are on, draw the returned debug segments in pink.
 

@@ -117,7 +117,9 @@ function polygonCenter(
   cameraSpaceVertices: Vec3[],
 ): Vec3 {
   if (vertexIndices.length === 0) return new Vec3(0, 0, 0);
-  let x = 0, y = 0, z = 0;
+  let x = 0,
+    y = 0,
+    z = 0;
   for (const i of vertexIndices) {
     const v = cameraSpaceVertices[i];
     x += v.x;
@@ -165,11 +167,22 @@ export interface ProjectSceneOptions {
 }
 
 /**
- * Project the whole scene to screen-space wireframe per polygon, with depth for Painter's algorithm.
- * Each object (after frustum culling) is rendered by polygon: for each polygon,
- * project its vertex indices; draw lines 1-2, 2-3, ..., n-1 (last back to first).
- * Batches are sorted by depth (farthest first) so drawing order gives correct occlusion.
- * Returns sorted batches and optional debug normal segments for drawing back-to-front.
+ * Project the whole scene to screen-space wireframe per polygon.
+ *
+ * Per object: frustum-cull via world-space bounding sphere, then transform vertices to
+ * camera space (view×model) and to screen space (viewProj×model).
+ *
+ * Per polygon:
+ *  - Back-face culling (optional): compute the surface normal in camera space and skip the
+ *    polygon when dot(normal, -v0) < 0. Perspective-correct — the camera sits at the origin
+ *    in camera space, so -v0 is the exact view vector from the first vertex to the camera.
+ *  - Collect wireframe segments (consecutive vertex indices, last→first).
+ *  - Record average camera-space z as depth for Painter's algorithm.
+ *
+ * Painter's algorithm (optional): sort batches by depth ascending (farthest first) before
+ * returning, so callers can draw in order for correct back-to-front occlusion.
+ *
+ * Returns sorted batches and optional debug normal segments (small pink lines per polygon).
  */
 export function projectSceneToPolygonWireframe(
   scene: Scene,
@@ -214,8 +227,10 @@ export function projectSceneToPolygonWireframe(
     for (const polygon of mesh.polygons) {
       const normal = polygonNormal(polygon.vertexIndices, cameraSpaceVertices);
       if (options?.applyBackFaceCulling) {
-        // Back-face culling: in camera space camera looks down -Z, so front-facing = normal.z > 0
-        if (normal !== null && normal.z < 0) continue;
+        // Perspective-correct backface culling: camera sits at the origin in camera space,
+        // so the view vector from the first vertex toward the camera is simply its negation.
+        const toCamera = cameraSpaceVertices[polygon.vertexIndices[0]].negate();
+        if (normal !== null && toCamera.dot(normal) < 0) continue;
       }
 
       const segments = collectPolygonSegments(projectedVertices, polygon);
@@ -225,17 +240,15 @@ export function projectSceneToPolygonWireframe(
       }
 
       if (options?.debugShowDirection && normal) {
-        const center = polygonCenter(polygon.vertexIndices, cameraSpaceVertices);
+        const center = polygonCenter(
+          polygon.vertexIndices,
+          cameraSpaceVertices,
+        );
         const end = center.add(normal.scale(DEBUG_NORMAL_LENGTH));
         const pStart = projectPoint(center, projection, viewport);
         const pEnd = projectPoint(end, projection, viewport);
         if (pStart && !pStart.behind && pEnd && !pEnd.behind) {
-          debugNormalSegments.push([
-            pStart.x,
-            pStart.y,
-            pEnd.x,
-            pEnd.y,
-          ]);
+          debugNormalSegments.push([pStart.x, pStart.y, pEnd.x, pEnd.y]);
         }
       }
     }
