@@ -88,6 +88,7 @@ async function main() {
         scene,
         viewProj,
         viewport,
+        projection,
         {
           debugShowDirection: DEBUG_SHOW_DIRECTION,
           applyPaintersAlgorithm: APPLY_PAINTERS_ALGORITHM,

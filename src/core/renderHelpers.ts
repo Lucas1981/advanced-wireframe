@@ -188,6 +188,7 @@ export function projectSceneToPolygonWireframe(
   scene: Scene,
   viewProj: Mat4,
   viewport: Viewport,
+  projection: Mat4,
   options?: ProjectSceneOptions,
 ): ProjectSceneResult {
   const batches: DrawablePolygonBatch[] = [];
@@ -195,7 +196,6 @@ export function projectSceneToPolygonWireframe(
   const camera = scene.camera;
   const view = camera.getViewMatrix();
   const aspect = viewport.width / viewport.height;
-  const projection = camera.getProjectionMatrix(aspect);
 
   for (const object of scene.objects) {
     const mesh = object.mesh;
