@@ -37,6 +37,7 @@ const camera = new Camera(
   far,
 );
 const input = new InputController();
+const projection = camera.getProjectionMatrix(aspect);
 
 /** When true, draw each polygon's surface normal as a small pink line. */
 const DEBUG_SHOW_DIRECTION = false;
@@ -79,9 +80,8 @@ async function main() {
         object.rotation.y = angle;
       }
 
-      // Recompute view-projection from current camera
+      // Recompute view-projection from current camera (projection is stable, view changes each frame)
       const view = camera.getViewMatrix();
-      const projection = camera.getProjectionMatrix(aspect);
       const viewProj = projection.multiply(view);
 
       const { batches, debugNormalSegments } = projectSceneToPolygonWireframe(
