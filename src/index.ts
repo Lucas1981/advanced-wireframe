@@ -2,6 +2,7 @@
 import { loadMesh } from "./io/meshLoader";
 import { Vec3 } from "./math/vec3";
 import { projectSceneToPolygonWireframe } from "./core/renderHelpers";
+import { drawScene } from "./core/draw";
 import { Viewport } from "./math/projection";
 import { degToRad } from "./math/utils";
 import { Canvas } from "./core/Canvas";
@@ -84,7 +85,7 @@ async function main() {
       const view = camera.getViewMatrix();
       const viewProj = projection.multiply(view);
 
-      const { batches, debugNormalSegments } = projectSceneToPolygonWireframe(
+      const drawableScene = projectSceneToPolygonWireframe(
         scene,
         viewProj,
         viewport,
@@ -95,13 +96,7 @@ async function main() {
           applyBackFaceCulling: APPLY_BACK_FACE_CULLING,
         },
       );
-      const lineWidth = 2;
-      for (const batch of batches) {
-        canvas.drawLines(batch.segments, batch.color, lineWidth);
-      }
-      if (debugNormalSegments.length > 0) {
-        canvas.drawLines(debugNormalSegments, "#ff69b4", 1);
-      }
+      drawScene(canvas, drawableScene);
 
       requestAnimationFrame(render);
     }

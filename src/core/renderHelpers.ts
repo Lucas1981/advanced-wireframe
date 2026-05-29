@@ -5,29 +5,12 @@ import { projectPoint, Viewport } from "../math/projection";
 import { isSphereInFrustum } from "../math/frustum";
 import { Scene } from "./Scene";
 import type { Polygon } from "../io/meshLoader";
+import type { DrawableScene } from "./draw";
 
 /** Geometry that has vertices and polygons (Mesh or MeshData). */
 export interface MeshLike {
   vertices: Vec3[];
   polygons: Polygon[];
-}
-
-/** A batch of line segments drawn in a single color (e.g. one polygon's wireframe). */
-export interface ColoredSegmentBatch {
-  color: string;
-  segments: Array<[number, number, number, number]>;
-}
-
-/** A drawable polygon batch with depth for Painter's algorithm (sort back-to-front). */
-export interface DrawablePolygonBatch extends ColoredSegmentBatch {
-  /** Camera-space z (negative in front of camera); used for depth sort (farthest first). */
-  depth: number;
-}
-
-/** Result of projectSceneToPolygonWireframe: batches to draw, and optional debug normal segments. */
-export interface ProjectSceneResult {
-  batches: ColoredSegmentBatch[];
-  debugNormalSegments: Array<[number, number, number, number]>;
 }
 
 /** Length of debug normal line in camera-space units. */
@@ -75,17 +58,14 @@ function transformVerticesToCameraSpace(
 
 /**
  * Compute polygon depth for Painter's algorithm: average camera-space z of its vertices.
+ * `czlist` is a flat array of camera-space z values parallel to the shared tvlist,
+ * so `vertexIndices` are already the global (offset-adjusted) indices.
  * Smaller z = farther from camera (draw first).
  */
-function polygonDepth(
-  vertexIndices: number[],
-  cameraSpaceVertices: Vec3[],
-): number {
+function polygonDepth(vertexIndices: number[], czlist: number[]): number {
   if (vertexIndices.length === 0) return 0;
   let sum = 0;
-  for (const i of vertexIndices) {
-    sum += cameraSpaceVertices[i].z;
-  }
+  for (const i of vertexIndices) sum += czlist[i];
   return sum / vertexIndices.length;
 }
 
@@ -131,58 +111,45 @@ function polygonCenter(
 }
 
 /**
- * Build wireframe segments for a single polygon from projected vertices.
- * Draws lines between consecutive vertex indices, then last back to first.
- * Returns the segments, or null if any polygon vertex is invalid or behind.
+ * Returns true if all vertices of a polygon project to valid screen positions.
  */
-export function collectPolygonSegments(
-  projectedVertices: (Vec3 | null)[],
-  polygon: Polygon,
-): Array<[number, number, number, number]> | null {
-  const indices = polygon.vertexIndices;
-  if (indices.length < 2) return [];
-
-  const segments: Array<[number, number, number, number]> = [];
-
-  for (let i = 0; i < indices.length; i++) {
-    const idxA = indices[i];
-    const idxB = indices[(i + 1) % indices.length];
-    const vA = projectedVertices[idxA];
-    const vB = projectedVertices[idxB];
-
-    if (!vA || !vB) return null;
-    segments.push([vA.x, vA.y, vB.x, vB.y]);
+function polygonIsVisible(
+  vertexIndices: number[],
+  tvlist: (Vec3 | null)[],
+  offset: number,
+): boolean {
+  for (const i of vertexIndices) {
+    if (!tvlist[i + offset]) return false;
   }
-
-  return segments;
+  return true;
 }
 
 export interface ProjectSceneOptions {
   /** When true, also return debug normal segments (small pink lines per polygon). */
   debugShowDirection?: boolean;
-  /** When true, sort batches by depth (farthest first) for Painter's algorithm. */
+  /** When true, sort polygons by depth (farthest first) for Painter's algorithm. */
   applyPaintersAlgorithm?: boolean;
   /** When true, skip polygons facing away from the camera (back-face culling). */
   applyBackFaceCulling?: boolean;
 }
 
 /**
- * Project the whole scene to screen-space wireframe per polygon.
+ * Project the whole scene into a single merged vertex list and flat polygon list.
  *
  * Per object: frustum-cull via world-space bounding sphere, then transform vertices to
- * camera space (view×model) and to screen space (viewProj×model).
+ * camera space (view×model) and to screen space (viewProj×model). Each object's projected
+ * vertices are appended to the shared tvlist; polygon vertex indices are offset accordingly
+ * so they remain valid references into the combined array.
  *
  * Per polygon:
  *  - Back-face culling (optional): compute the surface normal in camera space and skip the
  *    polygon when dot(normal, -v0) < 0. Perspective-correct — the camera sits at the origin
  *    in camera space, so -v0 is the exact view vector from the first vertex to the camera.
- *  - Collect wireframe segments (consecutive vertex indices, last→first).
- *  - Record average camera-space z as depth for Painter's algorithm.
+ *  - Validity check: skip any polygon where a vertex is behind the camera.
+ *  - Record average camera-space z as depth only when Painter's algorithm is enabled.
  *
- * Painter's algorithm (optional): sort batches by depth ascending (farthest first) before
- * returning, so callers can draw in order for correct back-to-front occlusion.
- *
- * Returns sorted batches and optional debug normal segments (small pink lines per polygon).
+ * Painter's algorithm (optional): sort all polygons by depth ascending (farthest first)
+ * before returning, enabling correct cross-object back-to-front occlusion.
  */
 export function projectSceneToPolygonWireframe(
   scene: Scene,
@@ -190,8 +157,10 @@ export function projectSceneToPolygonWireframe(
   viewport: Viewport,
   projection: Mat4,
   options?: ProjectSceneOptions,
-): ProjectSceneResult {
-  const batches: DrawablePolygonBatch[] = [];
+): DrawableScene {
+  const tvlist: (Vec3 | null)[] = [];
+  const czlist: number[] = []; // camera-space z per vertex, parallel to tvlist
+  const polygons: DrawableScene["polygons"] = [];
   const debugNormalSegments: Array<[number, number, number, number]> = [];
   const camera = scene.camera;
   const view = camera.getViewMatrix();
@@ -222,22 +191,27 @@ export function projectSceneToPolygonWireframe(
     const viewModel = view.multiply(model);
     const mvp = viewProj.multiply(model);
     const cameraSpaceVertices = transformVerticesToCameraSpace(mesh, viewModel);
-    const projectedVertices = projectMeshVertices(mesh, mvp, viewport);
+    const objectTvlist = projectMeshVertices(mesh, mvp, viewport);
+
+    // Record where this object's vertices begin in the shared tvlist.
+    const vertexOffset = tvlist.length;
+    for (const v of objectTvlist) tvlist.push(v);
+    for (const v of cameraSpaceVertices) czlist.push(v.z);
 
     for (const polygon of mesh.polygons) {
       const normal = polygonNormal(polygon.vertexIndices, cameraSpaceVertices);
       if (options?.applyBackFaceCulling) {
-        // Perspective-correct backface culling: camera sits at the origin in camera space,
-        // so the view vector from the first vertex toward the camera is simply its negation.
         const toCamera = cameraSpaceVertices[polygon.vertexIndices[0]].negate();
         if (normal !== null && toCamera.dot(normal) < 0) continue;
       }
 
-      const segments = collectPolygonSegments(projectedVertices, polygon);
-      if (segments !== null && segments.length > 0) {
-        const depth = polygonDepth(polygon.vertexIndices, cameraSpaceVertices);
-        batches.push({ color: polygon.color, segments, depth });
-      }
+      if (!polygonIsVisible(polygon.vertexIndices, tvlist, vertexOffset)) continue;
+
+      polygons.push({
+        vertexIndices: polygon.vertexIndices.map(i => i + vertexOffset),
+        color: polygon.color,
+        depth: 0,
+      });
 
       if (options?.debugShowDirection && normal) {
         const center = polygonCenter(
@@ -255,8 +229,11 @@ export function projectSceneToPolygonWireframe(
   }
 
   if (options?.applyPaintersAlgorithm) {
-    batches.sort((a, b) => a.depth - b.depth);
+    for (const poly of polygons) {
+      poly.depth = polygonDepth(poly.vertexIndices, czlist);
+    }
+    polygons.sort((a, b) => a.depth - b.depth);
   }
 
-  return { batches, debugNormalSegments };
+  return { tvlist, polygons, debugNormalSegments };
 }
